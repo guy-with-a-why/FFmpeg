@@ -2099,6 +2099,47 @@ static int h264_parse_slice_id(const H264Context *h, H264SliceContext *sl)
     return 0;
 }
 
+int ff_h264_attach_slice_partition(const H264Context *h, H264SliceContext *sl,
+                                   const H2645NAL *nal)
+{
+    const PPS *pps = h->ps.pps_list[sl->pps_id];
+    GetBitContext gb = nal->gb;
+    int redundant_pic_cnt = 0;
+    unsigned slice_id;
+
+    if (!sl->data_partitioning)
+        return AVERROR_INVALIDDATA;
+
+    slice_id = get_ue_golomb_long(&gb);
+    if (pps->sps->residual_color_transform_flag)
+        skip_bits(&gb, 2);                  // colour_plane_id
+    if (pps->redundant_pic_cnt_present)
+        redundant_pic_cnt = get_ue_golomb(&gb);
+
+    if (get_bits_left(&gb) < 0) {
+        av_log(h->avctx, AV_LOG_ERROR, "Truncated slice data partition\n");
+        return AVERROR_INVALIDDATA;
+    }
+
+    /* 7.4.2.9.2: B and C repeat the slice_id and redundant_pic_cnt of their A. */
+    if (slice_id != sl->slice_id || redundant_pic_cnt != sl->redundant_pic_count) {
+        av_log(h->avctx, AV_LOG_WARNING, "Slice data partition %c does not "
+               "match the preceding partition A\n",
+               nal->type == H264_NAL_DPB ? 'B' : 'C');
+        return AVERROR_INVALIDDATA;
+    }
+
+    if (nal->type == H264_NAL_DPB) {
+        sl->gb_dpb        = gb;
+        sl->dpb_available = 1;
+    } else {
+        sl->gb_dpc        = gb;
+        sl->dpc_available = 1;
+    }
+
+    return 0;
+}
+
 int ff_h264_queue_decode_slice(H264Context *h, const H2645NAL *nal)
 {
     H264SliceContext *sl = h->slice_ctx + h->nb_slice_ctx_queued;

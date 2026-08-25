@@ -700,6 +700,13 @@ void ff_h264_draw_horiz_band(const H264Context *h, H264SliceContext *sl, int y, 
  * slices are queued for the previous field, they are decoded.
  */
 int ff_h264_queue_decode_slice(H264Context *h, const H2645NAL *nal);
+
+/**
+ * Attach a slice data partition B or C to the slice started by partition A.
+ */
+int ff_h264_attach_slice_partition(const H264Context *h, H264SliceContext *sl,
+                                   const H2645NAL *nal);
+
 int ff_h264_execute_decode_slices(H264Context *h);
 int ff_h264_update_thread_context(AVCodecContext *dst,
                                   const AVCodecContext *src);
